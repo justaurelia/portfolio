@@ -36,7 +36,7 @@ const timeline: TimelineItem[] = [
     year: "2023",
     title: "From bakery to SaaS",
     description: "Resold my bakery business to fully dedicate to PastelarAI and started intensive AI and cloud training.",
-    learned: "Pivoting to tech requires resilience and fast learning.",
+    learned: "Coming back to tech with resilience and fast learning.",
     icon: "idea",
     color: "bg-amber-400",
     colorIcon: "text-amber-400",
@@ -53,7 +53,7 @@ const timeline: TimelineItem[] = [
   {
     year: "2020",
     title: "Certified Pastry Chef",
-    description: "Earned French Certificate of Pastry while exploring entrepreneurship.",
+    description: "Earned French Certificate of Pastry while continuing to work as Pre-sales.",
     learned: "Commitment to mastering a new craft.",
     icon: "cert",
     color: "bg-violet-400",
@@ -71,8 +71,8 @@ const timeline: TimelineItem[] = [
   {
     year: "2014",
     title: "New product",
-    description: "Joined Axway to work on a startup-style product in a large organization.",
-    learned: "Building from scratch and adapting in dynamic environments.",
+    description: "Joined Axway to work on a new product Decision Insight.",
+    learned: "Adapting in dynamic environments and learning new concepts.",
     icon: "analytics",
     color: "bg-indigo-400",
     colorIcon: "text-indigo-400",
@@ -156,7 +156,7 @@ export default function HorizontalTimeline() {
                     <StarIcon className="w-3 h-3" />
                   </div>
                   <span>
-                    <span className="font-semibold not-italic">Insight:</span> Managing remote teams and refining product vision.
+                    <span className="font-semibold not-italic">Insight:</span> {item.learned}
                   </span>
                 </div>
                 <h3 className="flex w-full justify-center text-lg font-bold">{item.year}</h3>
@@ -180,7 +180,7 @@ export default function HorizontalTimeline() {
                     <StarIcon className="w-3 h-3" />
                   </div>
                   <span>
-                    <span className="font-semibold not-italic">Insight:</span> Managing remote teams and refining product vision.
+                    <span className="font-semibold not-italic">Insight:</span> {item.learned}
                   </span>
                 </div>
               </div>
