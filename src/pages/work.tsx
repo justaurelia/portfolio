@@ -1,5 +1,4 @@
-import InConstruction from "@/components/InConstruction";
-import WorkSection from "../components/WorkSection";
+import InConstruction from "./InConstruction";
 
 export default function Work() {
   return (
