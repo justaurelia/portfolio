@@ -1,0 +1,339 @@
+@import "tailwindcss";
+@variant dark (&:where(.dark, .dark *));
+
+@font-face {
+  font-family: "Occupied";
+  font-style: normal;
+  font-weight: 300;
+  src: url("../src/assets/fonts/occupied.regular.otf") format("opentype");
+  font-display: swap;
+}
+
+
+* {
+  font-family: "Montserrat", serif;
+  font-optical-sizing: auto;
+}
+
+body {
+  padding: 0;
+  margin: 0;
+}
+
+body::-webkit-scrollbar {
+  width: 0.3em;
+}
+
+body::-webkit-scrollbar-track {
+  box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.3);
+}
+
+body::-webkit-scrollbar-thumb {
+  background-color: darkgrey;
+  outline: 1px solid slategrey;
+}
+
+:root {
+  --background-color: #ffffff;
+  --text-color: #000000;
+}
+
+.dark {
+  --background-color: #1e2939;
+  --text-color: #ffffff;
+}
+
+.occupied {
+  font-family: "Occupied";
+  font-optical-sizing: auto;
+}
+
+.swiper-slide.swiper-slide-active {
+  transition-duration: 1500 !important;
+}
+
+/* swiper override */
+.line-swipe .swiper-wrapper .swiper-slide-fully-visible {
+  height: 180px !important;
+}
+
+.line-swipe .swiper-wrapper .swiper-slide-visible {
+  height: 160px;
+}
+
+.drops-in {
+  animation: drops 0.5s ease-in;
+}
+
+.hover-bg-gradient:hover {
+  background: linear-gradient(0deg,
+      #ba8f18 0%,
+      #dbc00e 50%,
+      rgba(248, 218, 23, 0.8) 100%);
+}
+
+@keyframes drops {
+  0% {
+    transform: translateY(50px);
+    /* Add units (e.g., px) */
+  }
+
+  100% {
+    transform: translateY(0);
+  }
+}
+
+@layer utilities {
+
+  /* Hide scrollbar for Chrome, Safari and Opera */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Hide scrollbar for IE, Edge and Firefox */
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    /* IE and Edge */
+    scrollbar-width: none;
+    /* Firefox */
+  }
+}
+
+@layer components {
+
+  /* container settings */
+  .box {
+    width: 100%;
+    padding-right: 15px;
+    padding-left: 15px;
+    margin-right: auto;
+    margin-left: auto;
+  }
+
+  @media (min-width: 576px) {
+    .box {
+      width: 540px;
+    }
+  }
+
+  @media (min-width: 768px) {
+    .box {
+      width: 720px;
+    }
+  }
+
+  @media (min-width: 958px) {
+    .box {
+      width: 880px;
+    }
+  }
+
+  @media (min-width: 992px) {
+    .box {
+      width: 960px;
+    }
+  }
+
+  @media (min-width: 1200px) {
+    .box {
+      width: 1140px;
+    }
+  }
+
+  @media (min-width: 1400px) {
+    .box {
+      width: 1360px;
+    }
+  }
+
+  @media (min-width: 1600px) {
+    .box {
+      width: 1460px;
+    }
+  }
+
+  @media (min-width: 1900px) {
+    .box {
+      width: 1860px;
+    }
+  }
+
+  .section {
+    padding: 80px 0px;
+  }
+
+  @media (max-width: 1000px) {
+    .section {
+      padding: 60px 0px;
+    }
+  }
+
+  .circle {
+    border-radius: 50%;
+  }
+
+  .bg-secondary {
+    background: #162552;
+  }
+
+  .text-primary {
+    color: #717171;
+  }
+
+  .text-bright {
+    color: white !important;
+  }
+
+  .bg-primary {
+    background: #f8b414;
+  }
+
+  .bg-light {
+    background: #f1f1f1;
+  }
+
+  .bg-fit {
+    background-size: 100% 100%;
+  }
+
+  .text-light {
+    color: #f1f1f1;
+  }
+
+  .btn-primary {
+    background: linear-gradient(94.42deg, #162552 0.92%, #f8b414 101.98%);
+    color: white;
+    font-weight: 500;
+    border-radius: 9px;
+    cursor: pointer;
+  }
+
+  .btn-disabled {
+    background: #11182795;
+    color: white;
+    font-weight: 500;
+    border-radius: 4px;
+    box-shadow: rgba(0, 0, 0, 0.1) 1.95px 1.95px 2.6px;
+  }
+
+  .btn-primary:hover {
+    background: #1d9cd7;
+    transform: scaleX(1.02);
+    transition: 0.6s;
+  }
+
+  .place-center {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .bg-gradient {
+    background: linear-gradient(0deg,
+        #ba8f18 0%,
+        #dbc00e 50%,
+        rgba(248, 218, 23, 0.8) 100%) !important;
+    background-image: linear-gradient(0deg,
+        #ba8f18 0%,
+        #dbc00e 50%,
+        rgba(248, 218, 23, 0.8) 100%) !important;
+  }
+
+  /* Gradient Text */
+  .text-gradient {
+    background: linear-gradient(0deg,
+        #ba8f18 0%,
+        #dbc00e 50%,
+        rgba(248, 218, 23, 0.8) 100%);
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .cus-shadow {
+    box-shadow: rgba(0, 0, 0, 0.16) 0px 1px 4px;
+  }
+
+  .slant-edge {
+    --p: 120px;
+    /* control the shape (can be percentage) */
+    aspect-ratio: 1;
+    clip-path: polygon(0 var(--p), 100% 0, 100% 100%, 0 100%);
+  }
+
+  .bg-gray-gradient {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0) 0%, rgba(0, 22, 58, 0.7) 100%);
+  }
+
+  .bg-swipe-gradient {
+    background: linear-gradient(0deg, rgba(186, 143, 24, 0.3) 0%, rgba(219, 192, 14, 0.3) 50%, rgba(248, 218, 23, 0.15) 100%);
+  }
+
+  .dialogue {
+    font-size: 2.5rem;
+    /* 2.5rem = 40px */
+    font-weight: 600;
+    /* Stronger weight for impact */
+    font-family: 'Inter', sans-serif;
+    /* Clean, modern font */
+    color: #333;
+    /* Dark gray for softness */
+    background-color: #f8f9fa;
+    /* Light gray background for contrast */
+    padding: 1rem 1.5rem;
+    /* 1rem = 16px padding top/bottom, 1.5rem = 24px padding sides */
+    border-radius: 1rem;
+    /* 1rem = 16px rounded corners */
+    line-height: 1.4;
+    /* Better vertical spacing */
+    max-width: 70%;
+    /* Prevent stretching */
+    box-sizing: border-box;
+    /* Prevent padding from increasing width */
+    display: inline-block;
+    /* Keeps content size dynamic */
+  }
+  
+  .thought-bubble {
+    position: absolute;
+    top: 50%; /* Adjust position as needed */
+    left: 70%; /* Adjust position as needed */
+    width: 250px;
+    padding: 15px;
+    background-color: #fff;
+    border: 2px solid #ccc;
+    border-radius: 20px;
+    font-size: 18px;
+    color: #333;
+    box-shadow: 3px 3px 10px rgba(0,0,0,0.1);
+    text-align: center;
+}
+
+/* Thought tail */
+.thought-bubble::after {
+    content: "";
+    position: absolute;
+    bottom: -20px;
+    left: 20px;
+    width: 30px;
+    height: 30px;
+    background-color: #fff;
+    border: 2px solid #ccc;
+    border-radius: 50%;
+    box-shadow: 3px 3px 10px rgba(0,0,0,0.1);
+}
+
+.thought-bubble::before {
+    content: "";
+    position: absolute;
+    bottom: -10px;
+    left: 10px;
+    width: 20px;
+    height: 20px;
+    background-color: #fff;
+    border: 2px solid #ccc;
+    border-radius: 50%;
+    box-shadow: 3px 3px 10px rgba(0,0,0,0.1);
+}
+
+}
