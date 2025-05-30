@@ -1,7 +1,7 @@
 import PageNotFound from "../pages/404";
 import LayoutClient from "../components/LayoutClient";
 import Home from "../pages/home";
-import InConstruction from "../pages/InConstruction";
+import Work from "../pages/work";
 import HorizontalTimeline from "../pages/Timeline";
 
 export const landingRoutes = [
@@ -15,7 +15,7 @@ export const landingRoutes = [
   },
   {
     path: "/work",
-    element: <LayoutClient><InConstruction/></LayoutClient>,
+    element: <LayoutClient><Work/></LayoutClient>,
   },
   {
     path: "*",

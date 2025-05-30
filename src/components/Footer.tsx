@@ -6,11 +6,15 @@ export default function Footer() {
       <div className="flex h-full">© {new Date().getFullYear()} Aurelia Azarmi</div>
       <a href="mailto:aurelia.azarmi@gmail.com" className="flex h-full items-center gap-2 hover:text-primary">
         <EnvelopeIcon className="w-5 h-5" />
-        Email Me
+        aurelia.azarmi@gmail.com
       </a>
       <a href="https://linkedin.com/in/aurelia-azarmi" target="_blank" className="flex h-full items-center gap-2 hover:text-primary">
         <img className="h-5" src="/LI-In-Bug.png"/>
         LinkedIn
+      </a>
+      <a href="https://github.com/justaurelia" target="_blank" className="flex h-full items-center gap-2 hover:text-primary">
+        <img className="h-5" src="/github-mark.png"/>
+        Github
       </a>
     </footer>
   );
