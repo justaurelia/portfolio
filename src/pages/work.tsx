@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import demoVideo1 from "/public/onboarding/demo.mp4"; // Example demo video
 //import demoVideo2 from "/public/scan/demo.mp4"; // Example demo video
 import { BrainCircuit, FileText, Hammer, FlaskConical, Film, Settings2, Github, ExternalLink, Copy, Check, ListChecks } from "lucide-react";
@@ -252,6 +252,7 @@ export default function Work() {
             ? activeFeature?.stages.find(s => s.id === 5)
             : null;
 
+
           return (
             <div
               key={i}
@@ -384,45 +385,57 @@ export default function Work() {
               ) : null}
 
               {/* Optional tools used */}
-              {stage.tools && (
-                <div className="text-sm text-gray-500 italic">
-                  <span className="font-semibold text-gray-600">Tools:</span> {stage.tools}
-                </div>
-              )}
+              {(() => {
+                const showTools = stage.tools && typeof stage.tools === 'string' && stage.tools.length > 0;
+                if (!showTools) return null as React.ReactNode;
+                return (
+                  <div className="text-sm text-gray-500 italic">
+                    <span className="font-semibold text-gray-600">Tools:</span> {stage.tools as string}
+                  </div>
+                ) as React.ReactNode;
+              })() as React.ReactNode}
 
               {/* Image */}
-              {activeTab === "supabase" && stage.id === 4 && afterStage && 'asset' in afterStage && afterStage.asset && typeof afterStage.asset === 'string' ? (
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="flex flex-col">
-                    <p className="text-sm font-semibold text-gray-600 mb-2 text-center">Before</p>
-                    {assetPath && (
-                      <img
-                        src={assetPath}
-                        alt={stage.title}
-                        className={`rounded-xl mx-auto w-full ${sizeClass} flex-shrink-0`}
-                      />
-                    )}
-                    <div className="flex-grow"></div>
-                    <p className="text-sm text-gray-500 mt-2 text-center">{stage.content}</p>
-                  </div>
-                  <div className="flex flex-col">
-                    <p className="text-sm font-semibold text-gray-600 mb-2 text-center">After</p>
+              {(() => {
+                if (activeTab === "supabase" && stage.id === 4 && afterStage && 'asset' in afterStage && afterStage.asset && typeof afterStage.asset === 'string') {
+                  return (
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="flex flex-col">
+                        <p className="text-sm font-semibold text-gray-600 mb-2 text-center">Before</p>
+                        {assetPath ? (
+                          <img
+                            src={assetPath}
+                            alt={stage.title}
+                            className={`rounded-xl mx-auto w-full ${sizeClass} flex-shrink-0`}
+                          />
+                        ) : null}
+                        <div className="flex-grow"></div>
+                        <p className="text-sm text-gray-500 mt-2 text-center">{stage.content}</p>
+                      </div>
+                      <div className="flex flex-col">
+                        <p className="text-sm font-semibold text-gray-600 mb-2 text-center">After</p>
+                        <img
+                          src={afterStage.asset}
+                          alt={afterStage.title}
+                          className={`rounded-xl mx-auto w-full ${sizeClass} flex-shrink-0`}
+                        />
+                        <div className="flex-grow"></div>
+                        <p className="text-sm text-gray-500 mt-2 text-center">{afterStage.content}</p>
+                      </div>
+                    </div>
+                  );
+                }
+                if (assetPath) {
+                  return (
                     <img
-                      src={afterStage.asset}
-                      alt={afterStage.title}
-                      className={`rounded-xl mx-auto w-full ${sizeClass} flex-shrink-0`}
+                      src={assetPath}
+                      alt={stage.title}
+                      className={`rounded-xl mx-auto ${sizeClass}`}
                     />
-                    <div className="flex-grow"></div>
-                    <p className="text-sm text-gray-500 mt-2 text-center">{afterStage.content}</p>
-                  </div>
-                </div>
-              ) : assetPath ? (
-                <img
-                  src={assetPath}
-                  alt={stage.title}
-                  className={`rounded-xl mx-auto ${sizeClass}`}
-                />
-              ) : null}
+                  );
+                }
+                return null;
+              })()}
 
               {/* Video */}
               {'video' in stage && stage.video && typeof stage.video === 'string' && (
