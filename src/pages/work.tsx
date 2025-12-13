@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import demoVideo1 from "/public/onboarding/demo.mp4"; // Example demo video
 //import demoVideo2 from "/public/scan/demo.mp4"; // Example demo video
 import { BrainCircuit, FileText, Hammer, FlaskConical, Film, Settings2, Github, ExternalLink, Copy, Check, ListChecks } from "lucide-react";
@@ -253,6 +253,7 @@ export default function Work() {
             : null;
 
 
+
           return (
             <div
               key={i}
@@ -386,14 +387,17 @@ export default function Work() {
 
               {/* Optional tools used */}
               {(() => {
-                const showTools = stage.tools && typeof stage.tools === 'string' && stage.tools.length > 0;
-                if (!showTools) return null as React.ReactNode;
-                return (
-                  <div className="text-sm text-gray-500 italic">
-                    <span className="font-semibold text-gray-600">Tools:</span> {stage.tools as string}
-                  </div>
-                ) as React.ReactNode;
-              })() as React.ReactNode}
+                const hasTools = Boolean(stage.tools && typeof stage.tools === 'string' && stage.tools.trim().length > 0);
+                if (hasTools) {
+                  const toolsText = stage.tools as string;
+                  return (
+                    <div className="text-sm text-gray-500 italic">
+                      <span className="font-semibold text-gray-600">Tools:</span> {toolsText}
+                    </div>
+                  );
+                }
+                return null;
+              })() as any}
 
               {/* Image */}
               {(() => {
