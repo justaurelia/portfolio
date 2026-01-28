@@ -39,7 +39,7 @@ export default function Home() {
 
         <div className="mt-6 space-y-2 flex flex-col justify-center items-center">
           <p className="text-xs text-gray-500 uppercase tracking-wider">Now Building</p>
-          <h3 className="text-xl font-semibold text-cyan-600">🚀 PastelarAI</h3>
+          <h3 className="text-xl font-semibold text-cyan-600">🚀 Jucosa</h3>
           <p className="text-gray-600 text-sm max-w-md text-center">
             AI-powered bakery management platform for smarter production, cost control, and growth.
           </p>

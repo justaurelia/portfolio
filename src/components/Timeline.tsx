@@ -15,8 +15,8 @@ type TimelineItem = {
 
 const timeline: TimelineItem[] = [
   {
-    year: "2025 (Goal)",
-    title: "Launching PastelarAI",
+    year: "2025",
+    title: "Launching Jucosa",
     description: "Aiming for production and bringing my AI-powered bakery management platform to life.",
     learned: "Planning and scaling a SaaS product for production.",
     icon: "product",
@@ -25,8 +25,8 @@ const timeline: TimelineItem[] = [
   },
   {
     year: "2024",
-    title: "Building PastelarAI",
-    description: "Hired frontend developer and fully focused on developing and shaping PastelarAI.",
+    title: "Building Jucosa",
+    description: "Hired frontend developer and fully focused on developing and shaping Jucosa.",
     learned: "Managing remote teams and refining product vision.",
     icon: "dev",
     color: "bg-teal-400",
@@ -35,7 +35,7 @@ const timeline: TimelineItem[] = [
   {
     year: "2023",
     title: "From bakery to SaaS",
-    description: "Resold my bakery business to fully dedicate to PastelarAI and started intensive AI and cloud training.",
+    description: "Resold my bakery business to fully dedicate to Jucosa and started intensive AI and cloud training.",
     learned: "Coming back to tech with resilience and fast learning.",
     icon: "idea",
     color: "bg-amber-400",

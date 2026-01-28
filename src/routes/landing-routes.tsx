@@ -2,7 +2,7 @@ import PageNotFound from "../pages/404";
 import LayoutClient from "../components/LayoutClient";
 import Home from "../pages/home";
 import Work from "../pages/work";
-import HorizontalTimeline from "../pages/Timeline";
+import HorizontalTimeline from "../components/Timeline";
 
 export const landingRoutes = [
   {
