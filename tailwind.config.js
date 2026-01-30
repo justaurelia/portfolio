@@ -8,7 +8,15 @@ export default withMT({
     './src/**/*.{ts,tsx}',
   ],
   theme: {
-    extend: {},
+    extend: {
+      colors: {
+        inkBlack: "#0D1821",
+        yaleBlue: "#344966",
+        powderBlue: "#B4CDED",
+        porcelain: "#F0F4EF",
+        drySage: "#BFCC94",
+      },
+    },
   },
   plugins: [],
 });

@@ -39,3 +39,6 @@ next-env.d.ts
 .amplify
 amplify_outputs*
 amplifyconfiguration*
+
+# RAG ingest manifest (local state for incremental ingest)
+rag/.ingest-manifest.json

@@ -1,7 +1,7 @@
 import PageNotFound from "../pages/404";
 import LayoutClient from "../components/LayoutClient";
 import Home from "../pages/home";
-import Work from "../pages/work";
+import CaseStudyPage from "../pages/CaseStudyPage";
 import HorizontalTimeline from "../components/Timeline";
 
 export const landingRoutes = [
@@ -14,8 +14,8 @@ export const landingRoutes = [
     element: <LayoutClient><HorizontalTimeline/></LayoutClient>,
   },
   {
-    path: "/work",
-    element: <LayoutClient><Work/></LayoutClient>,
+    path: "/case-studies/:name",
+    element: <LayoutClient><CaseStudyPage /></LayoutClient>,
   },
   {
     path: "*",

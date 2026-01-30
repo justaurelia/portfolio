@@ -1,7 +1,7 @@
 "use client";
 
 import Footer from "./Footer";
-import Navbar from "./Navbar";
+import Header from "./Header";
 import { useRef, useState, useLayoutEffect } from "react";
 
 function useElementHeight(ref: React.RefObject<HTMLElement>) {
@@ -29,15 +29,23 @@ export default function LayoutClient({ children }: { children: React.ReactNode }
   const mainHeight = `calc(100vh - ${headerHeight}px - ${footerHeight}px)`;
 
   return (
-    <div className="h-full w-full flex flex-col">
+    <div
+      className="h-full w-full flex flex-col min-h-screen"
+      style={{
+        background: "linear-gradient(180deg, var(--c-ink) 0%, var(--c-blue) 100%)",
+      }}
+    >
       <div ref={headerRef} className="sticky top-0 z-50">
-        <Navbar/>
+        <Header />
       </div>
-      <main className="p-8 mx-auto w-full overflow-auto relative bg-background text-textPrimary" style={{ height: mainHeight }}>
+      <main
+        className="p-8 mx-auto w-full overflow-auto relative text-porcelain"
+        style={{ height: mainHeight }}
+      >
         {children}
       </main>
       <div ref={footerRef} className="sticky bottom-0 z-50">
-        <Footer/>
+        <Footer />
       </div>
     </div>
   );

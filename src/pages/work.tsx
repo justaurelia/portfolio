@@ -1,5 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
+import { ArrowLeft } from "lucide-react";
 import demoVideo1 from "/public/onboarding/demo.mp4"; // Example demo video
 //import demoVideo2 from "/public/scan/demo.mp4"; // Example demo video
 import { BrainCircuit, FileText, Hammer, FlaskConical, Film, Settings2, Github, ExternalLink, Copy, Check, ListChecks } from "lucide-react";
@@ -163,14 +165,23 @@ const features = [
   // More features can be added here
 ];
 
-export default function Work() {
-  const [activeTab, setActiveTab] = useState("onboarding");
+export { features };
+
+type WorkProps = {
+  /** When set, show only this case study (no tabs). Used for /case-studies/:name */
+  initialFeatureId?: string;
+  singleStudy?: boolean;
+};
+
+export default function Work({ initialFeatureId, singleStudy }: WorkProps = {}) {
+  const [activeTab, setActiveTab] = useState(initialFeatureId ?? "onboarding");
   const [copiedLink, setCopiedLink] = useState<string | null>(null);
 
   const activeFeature = features.find((f) => f.id === activeTab);
 
-  // Handle hash-based navigation
+  // Handle hash-based navigation (only when not in single-study mode)
   useEffect(() => {
+    if (singleStudy) return;
     // Read hash from URL on mount
     const hash = window.location.hash.slice(1); // Remove the '#'
     if (hash) {
@@ -194,7 +205,7 @@ export default function Work() {
 
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
-  }, []);
+  }, [singleStudy]);
 
   // Update hash when tab changes
   const handleTabChange = (tabId: string) => {
@@ -214,20 +225,32 @@ export default function Work() {
 
   return (
     <div className="p-10 space-y-10">
-      <div className="flex gap-6 border-b pb-2">
-        {features.map((feature) => (
-          <button
-            key={feature.id}
-            className={`pb-1 ${activeTab === feature.id
-              ? "text-primary border-b-2 border-primary font-semibold"
-              : "text-gray-500"
-              }`}
-            onClick={() => handleTabChange(feature.id)}
-          >
-            {feature.label}
-          </button>
-        ))}
-      </div>
+      {singleStudy && (
+        <Link
+          to="/"
+          className="inline-flex items-center gap-2 text-primary hover:underline mb-4"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Back to home
+        </Link>
+      )}
+
+      {!singleStudy && (
+        <div className="flex gap-6 border-b pb-2">
+          {features.map((feature) => (
+            <button
+              key={feature.id}
+              className={`pb-1 ${activeTab === feature.id
+                ? "text-primary border-b-2 border-primary font-semibold"
+                : "text-gray-500"
+                }`}
+              onClick={() => handleTabChange(feature.id)}
+            >
+              {feature.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="space-y-12">
         {activeFeature?.stages.map((stage, i) => {

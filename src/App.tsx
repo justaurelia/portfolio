@@ -5,7 +5,7 @@ const router = createBrowserRouter([...landingRoutes]);
 
 function App() {
   return (
-    <main className="h-full dark:bg-gray-800 p-0">
+    <main className="h-full min-h-screen p-0">
         <RouterProvider router={router} />
     </main>
   );
