@@ -8,8 +8,10 @@ function pillToBestSource(p: { label: string; url: string }): BestSource {
   if (p.url.startsWith("prompt:")) type = "prompt";
   else if (p.url.startsWith("mailto:")) type = "contact";
   else if (p.url === "/about" || p.label === "Timeline") type = "timeline";
-  else if (/github\.com/i.test(p.url)) type = "github";
-  else if (/linkedin\.com|cal\.com|tel:/i.test(p.url)) type = "contact";
+  else if (/github\.com/i.test(p.url)) {
+    // Contact GitHub pill (label "GitHub") → show "GitHub"; case study GitHub → "GitHub · {title}"
+    type = p.label.trim().toLowerCase() === "github" ? "contact" : "github";
+  } else if (/linkedin\.com|cal\.com|tel:/i.test(p.url)) type = "contact";
   return { title: p.label, url: p.url, type };
 }
 

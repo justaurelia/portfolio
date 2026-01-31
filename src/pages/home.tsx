@@ -15,7 +15,7 @@ export default function Home() {
       </section>
 
       {/* Large prominent chat input bar - fills remaining height */}
-      <div id="chat" className="flex-1 min-h-0 flex flex-col">
+      <div id="chat" className="flex-1 min-h-0 min-w-0 flex flex-col md:min-w-[32rem]">
         <ChatBar />
         <p className="mt-3 text-center text-sm text-porcelain/55 flex-shrink-0 font-light italic">
           Built to answer your first questions.

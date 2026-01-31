@@ -121,6 +121,14 @@ function detectIntent(questionRaw: string): Intent {
 
   if (wantsList && /\b(case study|case studies)\b/.test(q)) return "LIST_CASE_STUDIES";
 
+  // Unclear intent but user talks about case study / case studies (e.g. "case study" or "case studies") → show list
+  if (
+    /\b(case study|case studies)\b/.test(q) &&
+    !/^(what is|tell me about|tell me more about|explain)\s+\S+/.test(q)
+  ) {
+    return "LIST_CASE_STUDIES";
+  }
+
   const journey =
     /\b(journey|timeline|experience|experiences|work history|career|resume|roles|jobs|background|first job|previous job|past job|employment)\b/.test(
       q
@@ -520,11 +528,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         }
       }
 
-      // If timeline/experience chunks were used, add timeline pill
+      // Only add timeline pill when the question was about career/timeline/experience (not on every answer that happened to use a timeline chunk)
+      const questionAboutCareerOrTimeline = /\b(timeline|journey|career|job|jobs|work|experience|experiences|background|history|path|when|dates?|years?)\b/i.test(
+        normalize(question)
+      );
       const usedTimelineChunks = chunks.some((c) =>
         /timeline|experience/i.test(c.source)
       );
-      if (usedTimelineChunks && !used.has(TIMELINE_PILL.url)) {
+      if (
+        usedTimelineChunks &&
+        questionAboutCareerOrTimeline &&
+        !used.has(TIMELINE_PILL.url)
+      ) {
         pills.push(TIMELINE_PILL);
       }
 
