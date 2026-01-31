@@ -20,6 +20,9 @@ export default function Home() {
         <p className="mt-3 text-center text-sm text-porcelain/55 flex-shrink-0 font-light italic">
           Built to answer your first questions.
         </p>
+        <p className="mt-1 text-center text-[10px] text-porcelain/40 flex-shrink-0">
+          Questions may be stored to improve this experience.
+        </p>
       </div>
     </div>
   );

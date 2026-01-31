@@ -131,6 +131,25 @@ textarea {
   }
 }
 
+/* Moving loading dots (chat waiting indicator) */
+@keyframes loading-dot {
+  0%, 80%, 100% {
+    opacity: 0.35;
+  }
+  40% {
+    opacity: 1;
+  }
+}
+.loading-dot {
+  animation: loading-dot 1.4s ease-in-out infinite both;
+}
+.loading-dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.loading-dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
 @layer utilities {
 
   /* Hide scrollbar for Chrome, Safari and Opera */

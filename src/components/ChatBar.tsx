@@ -1,6 +1,18 @@
 import { useState, useRef, useEffect } from "react";
+import { getOrCreateSessionId } from "../lib/sessionId";
 
-type BestSource = { title: string; url: string; type: "case-study" | "timeline" | "github" | "contact" };
+type BestSource = { title: string; url: string; type: "case-study" | "timeline" | "github" | "contact" | "prompt" };
+
+function pillToBestSource(p: { label: string; url: string }): BestSource {
+  let type: BestSource["type"] = "case-study";
+  if (p.url.startsWith("prompt:")) type = "prompt";
+  else if (p.url.startsWith("mailto:")) type = "contact";
+  else if (p.url === "/about" || p.label === "Timeline") type = "timeline";
+  else if (/github\.com/i.test(p.url)) type = "github";
+  else if (/linkedin\.com|cal\.com|tel:/i.test(p.url)) type = "contact";
+  return { title: p.label, url: p.url, type };
+}
+
 type Message = {
   role: "user" | "assistant";
   content: string;
@@ -85,32 +97,48 @@ function MessageContent({ content, role }: { content: string; role: Message["rol
 function SourcePill({
   source,
   onClick,
+  onPrompt,
 }: {
   source: BestSource;
   onClick: () => void;
+  onPrompt?: (prompt: string) => void;
 }) {
+  const isPrompt = source.url.startsWith("prompt:");
   const isExternal = source.url.startsWith("http://") || source.url.startsWith("https://");
   const openNewTab = isExternal;
   const label =
-    source.type === "timeline"
-      ? `Timeline · ${source.title}`
-      : source.type === "github"
-        ? `GitHub · ${source.title}`
-        : source.type === "contact"
-          ? source.title
-          : isExternal
-            ? `Website · ${source.title}`
-            : `Case study · ${source.title}`;
+    source.type === "prompt"
+      ? source.title
+      : source.type === "timeline"
+        ? "Timeline"
+        : source.type === "github"
+          ? `GitHub · ${source.title}`
+          : source.type === "contact"
+            ? source.title
+            : isExternal
+              ? `Website · ${source.title}`
+              : `Case study · ${source.title}`;
+  
+  const handleClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    onClick();
+    
+    if (isPrompt) {
+      const prompt = source.url.replace(/^prompt:/, "");
+      if (onPrompt) onPrompt(prompt);
+    } else if (openNewTab) {
+      window.open(source.url, "_blank", "noopener,noreferrer");
+    } else {
+      window.location.href = source.url;
+    }
+  };
+  
   return (
     <a
-      href={source.url}
+      href={isPrompt ? "#" : source.url}
       target={openNewTab ? "_blank" : "_self"}
       rel={openNewTab ? "noopener noreferrer" : "noopener"}
-      onClick={(e) => {
-        if (!openNewTab) e.preventDefault();
-        onClick();
-        if (!openNewTab) window.location.href = source.url;
-      }}
+      onClick={handleClick}
       className="inline-flex items-center gap-1.5 rounded-full border border-porcelain/30 bg-porcelain/10 px-3 py-1.5 text-[13px] text-porcelain hover:bg-porcelain/20 hover:border-porcelain/50 transition-colors"
     >
       <span aria-hidden>→</span>
@@ -140,7 +168,9 @@ export default function ChatBar() {
   const [isFocused, setIsFocused] = useState(false);
   const [clickedPillUrls, setClickedPillUrls] = useState<Set<string>>(new Set());
   const listRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const clickedPillUrlsRef = useRef(clickedPillUrls);
+  const prevLoadingRef = useRef(loading);
   clickedPillUrlsRef.current = clickedPillUrls;
 
   useEffect(() => {
@@ -148,6 +178,13 @@ export default function ChatBar() {
       listRef.current.scrollTop = listRef.current.scrollHeight;
     }
   }, [messages]);
+
+  useEffect(() => {
+    if (prevLoadingRef.current === true && loading === false) {
+      inputRef.current?.focus();
+    }
+    prevLoadingRef.current = loading;
+  }, [loading]);
 
   useEffect(() => {
     if (isFocused) return;
@@ -169,44 +206,36 @@ export default function ChatBar() {
     return () => clearInterval(id);
   }, [isFocused, propositionIndex, typedLength]);
 
-  const send = async () => {
-    const text = input.trim();
-    if (!text || loading) return;
+  const sendMessage = async (text: string) => {
+    if (!text.trim() || loading) return;
 
-    const userMessage: Message = { role: "user", content: text };
+    const userMessage: Message = { role: "user", content: text.trim() };
     setMessages((prev) => [...prev, userMessage]);
-    setInput("");
     setLoading(true);
 
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: [...messages, userMessage] }),
+        body: JSON.stringify({
+          messages: [...messages, userMessage],
+          session_id: getOrCreateSessionId(),
+          page_path: typeof window !== "undefined" ? window.location.pathname : "",
+        }),
       });
       const data = await res.json().catch(() => ({}));
       let reply: string;
       let bestSources: BestSource[] = [];
       if (res.ok && typeof data?.reply === "string") {
         reply = data.reply;
-        const raw = data.bestSources ?? (data.bestSource ? [data.bestSource] : []);
+        const raw = data.pills ?? [];
         const clicked = clickedPillUrlsRef.current;
         bestSources = (Array.isArray(raw) ? raw : [])
           .filter(
-            (bs: unknown) =>
-              bs &&
-              typeof (bs as BestSource).title === "string" &&
-              typeof (bs as BestSource).url === "string" &&
-              ((bs as BestSource).type === "case-study" ||
-                (bs as BestSource).type === "timeline" ||
-                (bs as BestSource).type === "github" ||
-                (bs as BestSource).type === "contact")
+            (p: unknown) =>
+              p && typeof (p as { label: string; url: string }).label === "string" && typeof (p as { label: string; url: string }).url === "string"
           )
-          .map((bs: { title: string; url: string; type: "case-study" | "timeline" | "github" | "contact" }) => ({
-            title: bs.title,
-            url: bs.url,
-            type: bs.type,
-          }))
+          .map((p: { label: string; url: string }) => pillToBestSource(p))
           .filter((s) => !clicked.has(s.url));
       } else if (!res.ok && typeof data?.error === "string") {
         reply = data.error;
@@ -234,6 +263,17 @@ export default function ChatBar() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const send = async () => {
+    const text = input.trim();
+    if (!text) return;
+    setInput("");
+    await sendMessage(text);
+  };
+
+  const sendPrompt = async (prompt: string) => {
+    await sendMessage(prompt);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -267,7 +307,7 @@ export default function ChatBar() {
               <MessageContent content={m.content} role={m.role} />
             </div>
             {m.role === "assistant" && m.bestSources && m.bestSources.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-2">
+              <div className="mt-2 flex flex-col gap-2">
                 {m.bestSources.map((source) => (
                   <SourcePill
                     key={source.url}
@@ -275,6 +315,7 @@ export default function ChatBar() {
                     onClick={() =>
                       setClickedPillUrls((prev) => new Set(prev).add(source.url))
                     }
+                    onPrompt={sendPrompt}
                   />
                 ))}
               </div>
@@ -282,8 +323,10 @@ export default function ChatBar() {
           </div>
         ))}
         {loading && (
-          <div className="self-start py-2.5 px-3.5 rounded-2xl text-[15px] bg-porcelain/15 text-porcelain/70 border border-porcelain/15">
-            ...
+          <div className="self-start py-2.5 px-3.5 rounded-2xl text-[15px] bg-porcelain/15 text-porcelain/70 border border-porcelain/15 inline-flex gap-0.5">
+            <span className="loading-dot">.</span>
+            <span className="loading-dot">.</span>
+            <span className="loading-dot">.</span>
           </div>
         )}
       </div>
@@ -291,6 +334,7 @@ export default function ChatBar() {
       {/* Chat input: palette background, porcelain border, powderBlue focus */}
       <div className="flex items-center gap-3 mt-2 py-3 px-4 rounded-3xl border border-porcelain/[0.12] bg-yaleBlue/40 focus-within:border-powderBlue transition-colors">
         <input
+          ref={inputRef}
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}

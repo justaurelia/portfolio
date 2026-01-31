@@ -133,7 +133,7 @@ const features = [
         title: "Demo",
         content: "Video walkthrough showing the email customization process and the final result.",
         icon: "Demo",
-        tools: "iMovie",
+        tools: "Loom",
         video: "/supabase-email/Supabase Demo.mp4",
         poster: "/supabase-email/supabaseDemoThumbnail.png",
         github: "https://github.com/justaurelia/supabase_demo",

@@ -135,9 +135,17 @@ function splitByMarkdownHeadings(md: string): Array<{ section: string | null; te
   return blocks.filter((b) => b.text.length > 0);
 }
 
+/** Min length for sliding-window chunks (avoids tiny fragments). Short sections are kept whole. */
+const MIN_CHUNK_LENGTH = 80;
+
 function chunkText(text: string, chunkSize = CHUNK_SIZE, overlap = OVERLAP): string[] {
   const clean = normalizeText(text);
   if (!clean) return [];
+
+  // Keep short sections (e.g. contact email, phone, address) as a single chunk
+  if (clean.length <= chunkSize) {
+    return clean.length > 0 ? [clean] : [];
+  }
 
   const chunks: string[] = [];
   let i = 0;
@@ -145,7 +153,7 @@ function chunkText(text: string, chunkSize = CHUNK_SIZE, overlap = OVERLAP): str
     chunks.push(clean.slice(i, i + chunkSize));
     i += Math.max(1, chunkSize - overlap);
   }
-  return chunks.filter((c) => c.trim().length >= 80);
+  return chunks.filter((c) => c.trim().length >= MIN_CHUNK_LENGTH);
 }
 
 function hashContent(s: string) {

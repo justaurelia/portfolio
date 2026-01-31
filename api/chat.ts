@@ -11,8 +11,24 @@ type VercelResponse = {
 
 type Message = { role: "user" | "assistant"; content: string };
 
+type Intent =
+  | "LIST_CASE_STUDIES"
+  | "JOURNEY"
+  | "CONTACT"
+  | "CASE_STUDY_QA"
+  | "GENERAL_QA";
+
+type Pill = { label: string; url: string };
+
+type CaseStudy = {
+  case_study_id: string;
+  title: string;
+  url?: string | null;
+  github?: string | null;
+};
+
 interface RagChunk {
-  id: string;
+  id: string | number;
   source: string;
   section: string | null;
   content: string;
@@ -20,366 +36,47 @@ interface RagChunk {
   similarity: number;
 }
 
-/** Derive title/url from source path only when RAG metadata has none (e.g. legacy chunks). */
-function fallbackTitleAndUrl(
-  source: string,
-  type: "case-study" | "timeline"
-): { title: string; url: string } | null {
-  if (type === "timeline" && source === "08_timeline.md") {
-    return { title: "My journey", url: "/about" };
-  }
-  if (type === "case-study" && source.startsWith("02_case-studies/")) {
-    const name = source.replace("02_case-studies/", "").replace(/\.md$/i, "");
-    if (!name) return null;
-    const title = name.charAt(0).toUpperCase() + name.slice(1).replace(/([A-Z])/g, " $1").trim();
-    return { title, url: `/case-studies/${name}` };
-  }
-  return null;
-}
-
-interface BestSource {
-  title: string;
-  url: string;
-  type: "case-study" | "timeline" | "github" | "contact";
-}
-
-interface ChatResponse {
+interface ApiResponse {
+  answer_md: string;
+  pills: Pill[];
+  sources?: Array<{ source: string; section: string | null; similarity: number }>;
+  debug?: { intent: Intent; retrieved?: number };
   reply: string;
-  sources: Array<{ source: string; section: string | null; similarity: number }>;
-  bestSources?: BestSource[];
 }
-
-// ─────────────────────────────────────────────────────────────
-// Hardcoded direct links for specific products (always show when user asks about them)
-// ─────────────────────────────────────────────────────────────
-
-const DIRECT_PRODUCT_PILLS: Record<string, BestSource> = {
-  jucosa: { title: "Jucosa", url: "https://www.jucosa.io/", type: "case-study" },
-  livelivelove: { title: "LiveLiveLove", url: "https://livelive.love/", type: "case-study" },
-};
-
-/** Detect if question is specifically about Jucosa or LiveLiveLove (e.g. "what is jucosa", "tell me about LiveLiveLove"). */
-function getDirectProductFromQuestion(question: string): BestSource | null {
-  const trimmed = question.trim().toLowerCase();
-  const noSpaces = trimmed.replace(/\s+/g, "");
-  if (noSpaces.includes("jucosa")) return DIRECT_PRODUCT_PILLS.jucosa;
-  if (noSpaces.includes("livelivelove") || trimmed.includes("live live love")) return DIRECT_PRODUCT_PILLS.livelivelove;
-  return null;
-}
-
-// ─────────────────────────────────────────────────────────────
-// Validation helpers
-// ─────────────────────────────────────────────────────────────
 
 function isMessage(m: unknown): m is Message {
   if (typeof m !== "object" || m === null) return false;
   const x = m as Record<string, unknown>;
-  if (typeof x.role !== "string" || typeof x.content !== "string") return false;
   if (x.role !== "user" && x.role !== "assistant") return false;
-  return true;
+  return typeof x.content === "string";
 }
 
 function parseMessages(body: unknown): Message[] | null {
   if (typeof body !== "object" || body === null) return null;
   const m = (body as Record<string, unknown>).messages;
   if (!Array.isArray(m)) return null;
-  for (const item of m) {
-    if (!isMessage(item)) return null;
-  }
+  for (const item of m) if (!isMessage(item)) return null;
   return m as Message[];
 }
 
-// ─────────────────────────────────────────────────────────────
-// Short timeline (deterministic, no RAG)
-// ─────────────────────────────────────────────────────────────
-
-const SHORT_TIMELINE = `Here’s the short version:
-
-• **2008–2014** — Customer service and product roles; foundations in engineering and cross-functional work.
-
-• **2014–2020** — Pre-sales, then certified pastry chef while still in tech.
-
-• **2021** — Moved to the US, launched an online pastry shop and partnerships.
-
-• **2023** — Resold the bakery to focus full-time on Jucosa and AI/cloud.
-
-• **2024–2025** — Building and launching the AI-powered bakery management platform.`;
-
-const AFFIRMATIVE_PATTERN =
-  /^(yes|yeah|yep|ok|okay|sure|show|go on|go|please|yup|absolutely|sounds good|let's go|do it|give me)\s*[.!?]*$/i;
-
-function lastAssistantMessage(messages: Message[]): string {
-  const last = [...messages].reverse().find((m) => m.role === "assistant");
-  return last?.content?.trim() ?? "";
-}
-
-function offeredShortTimeline(assistantContent: string): boolean {
-  return /want the short timeline\?/i.test(assistantContent);
-}
-
-/** True if the assistant message contains an offer (e.g. "do you want", "want me to", "shall I"). */
-function offeredSomething(assistantContent: string): boolean {
-  if (!assistantContent.trim()) return false;
-  return /(do you want|want me to|shall I|want the|would you like|can I (send|give|point)|I can (send|give|point))/i.test(
-    assistantContent
-  );
-}
-
-/** Content of the user message before the last one (for "yes" follow-up context). */
-function previousUserMessage(messages: Message[]): string | null {
-  const userMessages = messages.filter((m) => m.role === "user");
-  if (userMessages.length < 2) return null;
-  return userMessages[userMessages.length - 2].content.trim() || null;
-}
-
-function isAffirmative(userContent: string): boolean {
-  const trimmed = userContent.trim();
-  return trimmed.length > 0 && AFFIRMATIVE_PATTERN.test(trimmed);
-}
-
-// ─────────────────────────────────────────────────────────────
-// Query intents: definition, list case studies
-// ─────────────────────────────────────────────────────────────
-
-const DEFINITION_INTENT_PATTERN = /^(what is|define|explain)\s+/i;
-const LIST_CASE_STUDIES_PATTERN =
-  /(what are your case stud(y|ies)|list (your )?case stud(y|ies)|show (me )?your case stud(y|ies)|(your |all )?case stud(y|ies)\s*(\?|$))/i;
-
-function parseDefinitionIntent(question: string): { definitionIntent: boolean; entity: string } {
-  const trimmed = question.trim();
-  const definitionIntent = DEFINITION_INTENT_PATTERN.test(trimmed);
-  const remainder = definitionIntent
-    ? trimmed.replace(DEFINITION_INTENT_PATTERN, "").trim()
-    : trimmed;
-  const entity = remainder
-    .toLowerCase()
-    .replace(/[^\w\s-]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  return { definitionIntent, entity };
-}
-
-function isListCaseStudiesIntent(question: string): boolean {
-  return LIST_CASE_STUDIES_PATTERN.test(question.trim());
-}
-
-const GITHUB_INTENT_PATTERN = /\b(github|code|demo|repo|repository|source code)\b/i;
-
-function isGitHubIntent(question: string): boolean {
-  return GITHUB_INTENT_PATTERN.test(question.trim());
-}
-
-/** Contact / personal info: email, phone, address, linkedin, how to reach, contact. */
-const CONTACT_INTENT_PATTERN =
-  /\b(email|phone|number|address|location|linkedin|contact|reach you|how to (contact|reach)|where (do you )?live|your (email|phone|address|number)\b)/i;
-
-function isContactIntent(question: string): boolean {
-  return CONTACT_INTENT_PATTERN.test(question.trim());
-}
-
-/** Fallback contact text when retrieval returns no contact chunks—so personal info always works. */
-const CONTACT_FALLBACK = `Contact information:
-Email: aurelia.azarmi@gmail.com
-Phone: +1(925)915-2274
-Address: San Francisco Bay Area
-LinkedIn: https://linkedin.com/in/aurelia-azarmi
-GitHub: https://github.com/justaurelia`;
-
-/** Contact CTA pills (Email, Phone, LinkedIn, GitHub) shown below assistant message for contact intent. */
-const CONTACT_CTA_PILLS: BestSource[] = [
-  { title: "Email", url: "mailto:aurelia.azarmi@gmail.com", type: "contact" },
-  { title: "Phone", url: "tel:+19259152274", type: "contact" },
-  { title: "LinkedIn", url: "https://linkedin.com/in/aurelia-azarmi", type: "contact" },
-  { title: "GitHub", url: "https://github.com/justaurelia", type: "contact" },
-];
-
-// ─────────────────────────────────────────────────────────────
-// Source aggregation by document (docKey, docScore, docMeta)
-// ─────────────────────────────────────────────────────────────
-
-/** Max pills for non-definition intents. Definition intent uses 1 max and strict entity match. */
-const MAX_BEST_SOURCES_DEFAULT = 1;
-
-function getChunkType(c: RagChunk): "case-study" | "timeline" | null {
-  const meta = c.metadata as Record<string, unknown> | null;
-  if (meta?.type === "timeline") return "timeline";
-  if (meta?.type === "case-study") return "case-study";
-  if (c.source.startsWith("02_case-studies/")) return "case-study";
-  return null;
-}
-
-/** Derive a short label from a GitHub URL (e.g. repo name). */
-function githubUrlToTitle(url: string): string {
+function safeJsonParse(body: unknown): unknown {
   try {
-    const p = new URL(url).pathname.replace(/^\/+|\/+$/g, "").split("/");
-    return p[p.length - 1] || "GitHub";
+    return typeof body === "string" ? JSON.parse(body) : body ?? null;
   } catch {
-    return "GitHub";
+    return null;
   }
 }
 
-/** docKey for aggregating chunks by document. */
-function getDocKey(c: RagChunk): string {
-  const meta = c.metadata as Record<string, unknown> | null;
-  const slug = typeof meta?.slug === "string" ? meta.slug.trim() : null;
-  const title = typeof meta?.title === "string" ? meta.title.trim() : null;
-  return (slug ?? title ?? c.source) || c.source;
+function lastUserQuestion(messages: Message[]): string {
+  const lastUser = [...messages].reverse().find((m) => m.role === "user");
+  return lastUser?.content?.trim() ?? "";
 }
 
-/** docMeta: type, title, slug, url, github from chunk (for filtering). */
-function getDocMeta(c: RagChunk): {
-  type: "case-study" | "timeline" | null;
-  title: string;
-  slug: string;
-  url: string | null;
-  github: string | null;
-} {
-  const type = getChunkType(c);
-  const meta = c.metadata as Record<string, unknown> | null;
-  const title = (typeof meta?.title === "string" ? meta.title : null)?.trim();
-  const slug = (typeof meta?.slug === "string" ? meta.slug : null)?.trim();
-  const url = (typeof meta?.url === "string" ? meta.url : null)?.trim() || null;
-  const github = (typeof meta?.github === "string" ? meta.github : null)?.trim() || null;
-  const resolvedTitleUrl =
-    type && (title && url ? { title, url } : fallbackTitleAndUrl(c.source, type));
-  return {
-    type,
-    title: resolvedTitleUrl?.title ?? title ?? "",
-    slug: slug ?? c.source.replace(/\.md$/i, "").replace(/.*\//, "") ?? "",
-    url: resolvedTitleUrl?.url ?? url ?? null,
-    github: github ?? null,
-  };
+function normalize(s: string): string {
+  return s.toLowerCase().replace(/[^\w\s-]/g, " ").replace(/\s+/g, " ").trim();
 }
 
-/** One BestSource per doc (case-study/timeline page or github link); url used as dedupe key. */
-function getBestSourceFromChunk(c: RagChunk): BestSource | null {
-  const type = getChunkType(c);
-  const meta = c.metadata as Record<string, unknown> | null;
-  if (type === "case-study" || type === "timeline") {
-    const title = (typeof meta?.title === "string" ? meta.title : null)?.trim();
-    const url = (typeof meta?.url === "string" ? meta.url : null)?.trim();
-    const resolved =
-      title && url ? { title, url } : fallbackTitleAndUrl(c.source, type);
-    if (resolved) return { ...resolved, type };
-  }
-  if (typeof meta?.github === "string" && meta.github.trim()) {
-    const url = (meta.github as string).trim();
-    return { title: githubUrlToTitle(url), url, type: "github" };
-  }
-  return null;
-}
-
-/** GitHub pill from a chunk (when user asks about GitHub / code / demos). */
-function getGitHubSourceFromChunk(c: RagChunk): BestSource | null {
-  const meta = c.metadata as Record<string, unknown> | null;
-  if (typeof meta?.github !== "string" || !meta.github.trim()) return null;
-  const url = (meta.github as string).trim();
-  return { title: githubUrlToTitle(url), url, type: "github" };
-}
-
-/** Aggregate by document: docKey, docScore = best (min) score per doc. RPC typically returns distance (lower = better). */
-function aggregateByDocument(
-  ragChunks: RagChunk[]
-): Array<{ docKey: string; docScore: number; docMeta: ReturnType<typeof getDocMeta>; best: BestSource }> {
-  const byDoc = new Map<
-    string,
-    { docScore: number; docMeta: ReturnType<typeof getDocMeta>; best: BestSource }
-  >();
-  for (const c of ragChunks) {
-    const score = typeof c.similarity === "number" ? c.similarity : 0;
-    const docKey = getDocKey(c);
-    const docMeta = getDocMeta(c);
-    const best = getBestSourceFromChunk(c);
-    if (!best) continue;
-    const existing = byDoc.get(docKey);
-    // Keep best (lowest) score per doc when RPC returns distance; else use max for similarity
-    const isBetter = existing === undefined || score < existing.docScore;
-    if (isBetter) {
-      byDoc.set(docKey, { docScore: score, docMeta, best });
-    }
-  }
-  return [...byDoc.entries()].map(([docKey, v]) => ({ docKey, ...v }));
-}
-
-/** Entity matches doc for definition intent: slug === entity, title includes entity, or entity includes slug (normalize spaces for slug match). */
-function docMatchesEntity(
-  entity: string,
-  docMeta: { slug: string; title: string }
-): boolean {
-  if (!entity) return false;
-  const slug = docMeta.slug.toLowerCase();
-  const title = docMeta.title.toLowerCase();
-  const entityNorm = entity.replace(/\s+/g, "").toLowerCase();
-  const slugNorm = slug.replace(/\s+/g, "");
-  const titleNorm = title.replace(/\s+/g, "");
-  return (
-    slug === entity ||
-    slugNorm === entityNorm ||
-    title.includes(entity) ||
-    titleNorm.includes(entityNorm) ||
-    entityNorm.includes(slugNorm)
-  );
-}
-
-/**
- * Build pills (URLs to display) from the same RAG chunks used for the message.
- * 1) Specific case study (what is X / define X / explain X) → one pill only (that case study).
- * 2) List case studies ("what are your case studies" etc.) → all case-study pills from results.
- * 3) Other → one pill (best-matching doc by score).
- */
-function pickBestSources(ragChunks: RagChunk[], question: string): BestSource[] {
-  const docs = aggregateByDocument(ragChunks);
-  const byBestFirst = (a: { docScore: number }, b: { docScore: number }) => a.docScore - b.docScore;
-
-  // 1) If user specifically asks about Jucosa or LiveLiveLove → single hardcoded direct-link pill
-  const directProduct = getDirectProductFromQuestion(question);
-  if (directProduct) {
-    return [directProduct];
-  }
-
-  // 2) Definition intent (what is X / define X / explain X) → one pill for matching case study
-  const { definitionIntent, entity } = parseDefinitionIntent(question);
-  if (definitionIntent && entity) {
-    const caseStudyDocs = docs.filter(
-      (d) => d.docMeta.type === "case-study" && docMatchesEntity(entity, d.docMeta)
-    );
-    const sorted = caseStudyDocs.sort(byBestFirst);
-    return sorted.slice(0, 1).map((d) => d.best);
-  }
-
-  // 3) GitHub / code / demo: user asks about GitHub or code → show GitHub pill(s) from RAG results (not case study)
-  if (isGitHubIntent(question)) {
-    const byUrl = new Map<string, BestSource>();
-    for (const c of ragChunks) {
-      const github = getGitHubSourceFromChunk(c);
-      if (github?.url) byUrl.set(github.url, github);
-    }
-    if (byUrl.size > 0) return [...byUrl.values()];
-  }
-
-  // 3b) Contact intent: show CTA pills (Email, Phone, LinkedIn, GitHub)
-  if (isContactIntent(question)) {
-    return CONTACT_CTA_PILLS;
-  }
-
-  // 4) List case studies: user asks for all → every case study that appears in RAG results (dedupe by url)
-  if (isListCaseStudiesIntent(question)) {
-    const byUrl = new Map<string, BestSource>();
-    for (const d of docs) {
-      if (d.docMeta.type === "case-study" && d.best.url) {
-        byUrl.set(d.best.url, d.best);
-      }
-    }
-    return [...byUrl.values()];
-  }
-
-  // 5) Other: one pill (best doc by score)
-  const sorted = docs.sort(byBestFirst);
-  return sorted.slice(0, MAX_BEST_SOURCES_DEFAULT).map((d) => d.best);
-}
-
-/** Remove markdown links and raw URLs so answer text is clean; pills show links below. */
-function stripLinksFromReply(text: string): string {
+function stripMarkdownLinksAndUrls(text: string): string {
   return text
     .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
     .replace(/\bhttps?:\/\/[^\s)]+/g, "")
@@ -388,172 +85,466 @@ function stripLinksFromReply(text: string): string {
 }
 
 // ─────────────────────────────────────────────────────────────
+// Deterministic pills
+// ─────────────────────────────────────────────────────────────
+
+const TIMELINE_PILL: Pill = { label: "Timeline", url: "/about" };
+
+// ⚠️ Update these to YOUR real destinations
+const CONTACT_PILLS: Pill[] = [
+  // Replace the email + links with your real ones
+  { label: "Email", url: "mailto:aurelia.azarmi@gmail.com" },
+  { label: "LinkedIn", url: "https://www.linkedin.com/in/aurelia-azarmi/" },
+  // Optional
+  { label: "GitHub", url: "https://github.com/justaurelia" },
+  // { label: "Book a call", url: "https://cal.com/your-handle" },
+];
+
+function caseStudyToPills(cs: CaseStudy): Pill[] {
+  const pills: Pill[] = [];
+  const title = cs.title || "Case study";
+  if (cs.url) pills.push({ label: title, url: cs.url });
+  if (cs.github) pills.push({ label: title, url: cs.github }); // UI shows "GitHub · {label}"
+  return pills;
+}
+
+// ─────────────────────────────────────────────────────────────
+// Router (cheap heuristics first; no LLM)
+// ─────────────────────────────────────────────────────────────
+
+function detectIntent(questionRaw: string): Intent {
+  const q = normalize(questionRaw);
+
+  const wantsList =
+    /\b(list|show|all)\b/.test(q) &&
+    /\b(case study|case studies|projects|work)\b/.test(q);
+
+  if (wantsList && /\b(case study|case studies)\b/.test(q)) return "LIST_CASE_STUDIES";
+
+  const journey =
+    /\b(journey|timeline|experience|experiences|work history|career|resume|roles|jobs|background|first job|previous job|past job|employment)\b/.test(
+      q
+    );
+  if (journey) return "JOURNEY";
+
+  // if user explicitly asks about a case study or "what is X" and likely a project name
+  const caseStudyAsk =
+    /\b(case study|case-study|project|startup|product)\b/.test(q) ||
+    /^(what is|tell me about|tell me more about|explain)\b/.test(q);
+  if (caseStudyAsk) return "CASE_STUDY_QA";
+
+  // Check contact last to avoid false positives (e.g., "email" in case study titles)
+  const contact =
+    /\b(contact|reach|email|linkedin|connect|calendar|call|meeting|book)\b/.test(q);
+  if (contact) return "CONTACT";
+
+  return "GENERAL_QA";
+}
+
+// ─────────────────────────────────────────────────────────────
+// Supabase helpers
+// ─────────────────────────────────────────────────────────────
+
+async function listCaseStudies(supabase: ReturnType<typeof createClient>): Promise<CaseStudy[]> {
+  // Prefer RPC if you created it (fast + deterministic)
+  const rpc = await supabase.rpc("list_case_studies");
+  if (!rpc.error && Array.isArray(rpc.data)) {
+    console.log("[listCaseStudies] RPC returned:", rpc.data.length, "rows");
+    return rpc.data
+      .map((r: any) => ({
+        case_study_id: String(r.case_study_id ?? "").trim(),
+        title: String(r.title ?? "").trim(),
+        url: r.url ? String(r.url) : null,
+        github: r.github ? String(r.github) : null,
+      }))
+      .filter((x: CaseStudy) => x.case_study_id && x.title);
+  }
+
+  console.log("[listCaseStudies] RPC failed or not available, using fallback. Error:", rpc.error);
+
+  // Fallback: pull metadata rows and dedupe in code
+  // NOTE: This can be slower if you have many chunks, but works to ship.
+  const { data, error } = await supabase
+    .from("rag_chunks")
+    .select("metadata,source")
+    .filter("metadata->>type", "eq", "case-study")
+    .limit(5000);
+
+  if (error) {
+    console.error("[listCaseStudies] Fallback query error:", error);
+    throw error;
+  }
+
+  console.log("[listCaseStudies] Fallback query returned:", data?.length ?? 0, "rows");
+
+  const map = new Map<string, CaseStudy>();
+  for (const row of data ?? []) {
+    const meta = (row as any).metadata as Record<string, unknown> | null;
+    if (!meta) {
+      console.log("[listCaseStudies] Row has no metadata, skipping");
+      continue;
+    }
+    const id =
+      (typeof meta.case_study_id === "string" ? meta.case_study_id.trim() : null) ??
+      (typeof meta.slug === "string" ? meta.slug.trim() : null) ??
+      "";
+    const title = typeof meta.title === "string" ? meta.title.trim() : "";
+    const url = typeof meta.url === "string" ? meta.url.trim() : null;
+    const github = typeof meta.github === "string" ? meta.github.trim() : null;
+    
+    console.log("[listCaseStudies] Processing row:", { id, title, url, github, meta_type: meta.type });
+    
+    if (!id || !title) {
+      console.log("[listCaseStudies] Skipping row (missing id or title):", { id, title });
+      continue;
+    }
+    if (!map.has(id)) map.set(id, { case_study_id: id, title, url, github });
+  }
+  
+  const result = [...map.values()].sort((a, b) => a.title.localeCompare(b.title));
+  console.log("[listCaseStudies] Final result:", result.length, "case studies:", result.map(cs => cs.case_study_id));
+  return result;
+}
+
+function buildContext(chunks: RagChunk[]): string {
+  if (!chunks.length) return "No relevant sources found.";
+  return chunks
+    .map((c, i) => {
+      const src = `${c.source}${c.section ? ` | ${c.section}` : ""}`;
+      return `SOURCE ${i + 1}: ${src}\n${c.content}`;
+    })
+    .join("\n\n---\n\n");
+}
+
+function extractCaseStudyMetaFromChunks(chunks: RagChunk[]): Map<string, CaseStudy> {
+  const map = new Map<string, CaseStudy>();
+  for (const c of chunks) {
+    const meta = (c.metadata ?? {}) as Record<string, unknown>;
+    const t = meta.type;
+    if (t !== "case-study") continue;
+
+    const id =
+      (typeof meta.case_study_id === "string" ? meta.case_study_id.trim() : null) ??
+      (typeof meta.slug === "string" ? meta.slug.trim() : null) ??
+      "";
+    const title = typeof meta.title === "string" ? meta.title.trim() : "";
+    const url = typeof meta.url === "string" ? meta.url.trim() : null;
+    const github = typeof meta.github === "string" ? meta.github.trim() : null;
+
+    if (!id || !title) continue;
+    if (!map.has(id)) map.set(id, { case_study_id: id, title, url, github });
+  }
+  return map;
+}
+
+// ─────────────────────────────────────────────────────────────
+// OpenAI helpers
+// ─────────────────────────────────────────────────────────────
+
+async function embedQuestion(openai: OpenAI, question: string): Promise<number[]> {
+  const emb = await openai.embeddings.create({
+    model: "text-embedding-3-small",
+    input: question,
+    encoding_format: "float",
+  });
+  return emb.data[0].embedding as number[];
+}
+
+async function retrieveChunks(
+  supabase: ReturnType<typeof createClient>,
+  query_embedding: number[],
+  match_count: number
+): Promise<RagChunk[]> {
+  const { data, error } = await supabase.rpc("match_rag_chunks", {
+    query_embedding,
+    match_count,
+  });
+  if (error) throw error;
+  return (data ?? []) as RagChunk[];
+}
+
+async function llmAnswerWithRefs(args: {
+  openai: OpenAI;
+  question: string;
+  context: string;
+  // if present, constrain refs to known ids for better precision
+  knownCaseStudyIds?: string[];
+}): Promise<{ answer_md: string; referenced_case_study_ids: string[] }> {
+  const { openai, question, context, knownCaseStudyIds } = args;
+
+  const allowed =
+    knownCaseStudyIds && knownCaseStudyIds.length
+      ? `Allowed case_study_ids: ${knownCaseStudyIds.join(", ")}`
+      : `Allowed case_study_ids: (use only ids that appear in SOURCES metadata; otherwise return []).`;
+
+  const system = `You ARE Aurélia Azarmi. This is your personal portfolio website and you're chatting directly with a visitor.
+
+Voice & tone:
+- Talk like a real person having a casual conversation, not like a resume or formal document.
+- Use "I" naturally: "I started at...", "That's where I learned...", "I really enjoyed..."
+- Be warm and personable — share brief personal reflections, not just facts.
+- Avoid bullet-point lists for simple questions. Use flowing sentences instead.
+- Keep it short and genuine — 2-3 sentences is often enough.
+
+Examples of good tone:
+- "My first job was at Sopra Banking Software back in 2008. I worked on payment systems and customer service projects — that's where I really learned the foundations of software engineering and developed a lot of empathy for end users."
+- "I'm currently building Jucosa, an AI-powered tool for bakeries. It's been quite a journey getting here!"
+
+Examples of bad tone (too formal/robotic):
+- "2008–2012: Software Engineer at Sopra Banking Software — Worked on payment engine projects."
+- "Here is a timeline of my career:"
+
+Rules:
+- Use ONLY the provided SOURCES for facts about your background, projects, and experience.
+- If the answer isn't in SOURCES, say you don't have that information handy and suggest what else you can help with.
+- Do NOT format answers as timelines or resume-style lists unless specifically asked for a list.
+- Do NOT include any URLs in the answer — the UI adds links separately.
+- Do NOT mention internal filenames like "SOURCE 1".
+- Return STRICT JSON only.
+
+Output JSON schema:
+{
+  "answer_md": string,
+  "referenced_case_study_ids": string[]
+}
+
+referenced_case_study_ids rules:
+- ONLY include IDs from the allowed list below. Do NOT invent IDs or use source filenames.
+- If the answer doesn't reference any case study from the allowed list, return an empty array [].
+- ${allowed}
+
+Citations:
+- Do NOT include source references like "(Case study: id)" in the answer_md. The UI will show relevant links separately.`;
+
+  const completion = await openai.chat.completions.create({
+    model: "gpt-4.1-mini",
+    temperature: 0.2,
+    messages: [
+      { role: "system", content: system },
+      { role: "system", content: `SOURCES:\n\n${context}` },
+      { role: "user", content: question },
+    ],
+  });
+
+  const raw = completion.choices[0]?.message?.content?.trim() ?? "";
+  // Parse strict JSON; fallback if model slips
+  try {
+    const parsed = JSON.parse(raw) as any;
+    const answer_md = typeof parsed.answer_md === "string" ? parsed.answer_md.trim() : "";
+    const referenced_case_study_ids = Array.isArray(parsed.referenced_case_study_ids)
+      ? parsed.referenced_case_study_ids.map((x: any) => String(x).trim()).filter(Boolean)
+      : [];
+    return { answer_md, referenced_case_study_ids };
+  } catch {
+    // Fallback: treat as plain text, no refs
+    return { answer_md: stripMarkdownLinksAndUrls(raw) || "Sorry — I couldn’t format that response.", referenced_case_study_ids: [] };
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
 // Handler
 // ─────────────────────────────────────────────────────────────
 
-export default async function handler(
-  req: VercelRequest,
-  res: VercelResponse
-): Promise<void> {
-  // 1) POST only
+export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   if (req.method !== "POST") {
-    res
-      .status(405)
-      .setHeader("Allow", "POST")
-      .json({ error: "Method not allowed" });
+    res.status(405).setHeader("Allow", "POST").json({ error: "Method not allowed" });
     return;
   }
 
-  // Parse body
-  let body: unknown;
-  try {
-    body =
-      typeof req.body === "string" ? JSON.parse(req.body) : req.body ?? null;
-  } catch {
-    res.status(400).json({ error: "Invalid JSON" });
-    return;
-  }
-
+  const body = safeJsonParse(req.body);
   const messages = parseMessages(body);
-  if (messages === null) {
+  if (!messages) {
     res.status(400).json({ error: "Missing or invalid messages" });
     return;
   }
 
-  // 2) Extract last user message
-  const lastUser = [...messages].reverse().find((m) => m.role === "user");
-  const question = lastUser?.content.trim() ?? "";
-
+  const question = lastUserQuestion(messages);
   if (!question) {
     res.status(400).json({
-      reply: "I didn't catch your question. Could you please type something?",
-      sources: [],
-    });
+      reply: "I didn't catch your question. Could you type something?",
+      answer_md: "I didn't catch your question. Could you type something?",
+      pills: [],
+    } satisfies ApiResponse);
     return;
   }
 
-  // 2b) Deterministic short timeline: if assistant offered it and user said yes, skip RAG
-  const lastAssistant = lastAssistantMessage(messages);
-  if (offeredShortTimeline(lastAssistant) && isAffirmative(question)) {
-    res.status(200).json({
-      reply: SHORT_TIMELINE,
-      sources: [],
-      bestSources: [{ title: "My journey", url: "/about", type: "timeline" }],
-    });
-    return;
-  }
-
-  // 2c) User said "yes" to an offer (e.g. "Want me to send the link?") → use previous question for RAG so we fulfill the offer
-  const isYesToOffer =
-    isAffirmative(question) &&
-    offeredSomething(lastAssistant) &&
-    !offeredShortTimeline(lastAssistant);
-  const effectiveQuery = isYesToOffer ? (previousUserMessage(messages) ?? question) : question;
-
-  // Validate env vars (fail fast, no secrets in response)
-  const { OPENAI_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } =
-    process.env;
-
+  const { OPENAI_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } = process.env;
   if (!OPENAI_API_KEY || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-    console.error("[chat] Missing environment variables");
+    console.error("[chat] Missing env vars");
     res.status(500).json({ error: "Server configuration error" });
     return;
   }
 
   const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
-  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false },
+  });
+
+  const intent = detectIntent(question);
 
   try {
-    // 3) Create embedding (use effectiveQuery so "yes" follow-up retrieves context from the original question)
-    const embeddingRes = await openai.embeddings.create({
-      model: "text-embedding-3-small",
-      input: effectiveQuery,
-    });
-    const queryEmbedding = embeddingRes.data[0].embedding;
-
-    // 4) Call Supabase RPC match_rag_chunks
-    const { data: chunks, error: rpcError } = await supabase.rpc(
-      "match_rag_chunks",
-      { query_embedding: queryEmbedding, match_count: 8 }
-    );
-
-    if (rpcError) {
-      console.error("[chat] Supabase RPC error:", rpcError);
-      res.status(500).json({ error: "Failed to search knowledge base" });
+    // ── CONTACT (deterministic)
+    if (intent === "CONTACT") {
+      const answer_md =
+        "Happy to continue the conversation — pick what’s easiest below.";
+      const response: ApiResponse = {
+        answer_md,
+        pills: CONTACT_PILLS,
+        reply: answer_md,
+        debug: { intent },
+      };
+      res.status(200).json(response);
       return;
     }
 
-    let ragChunks: RagChunk[] = chunks ?? [];
+    // ── LIST CASE STUDIES (deterministic list + pills)
+    if (intent === "LIST_CASE_STUDIES") {
+      const studies = await listCaseStudies(supabase);
 
-    // 5) Build context string and pills (contact questions always use fallback—no retrieval)
-    const contextString = isContactIntent(effectiveQuery)
-      ? `SOURCE: contact\n${CONTACT_FALLBACK}`
-      : ragChunks.length > 0
-        ? ragChunks
-            .map(
-              (c) =>
-                `SOURCE: ${c.source} | SECTION: ${c.section ?? "N/A"}\n${c.content}`
-            )
-            .join("\n\n---\n\n")
-        : "No relevant information found.";
-    const bestSources = pickBestSources(ragChunks, effectiveQuery);
+      if (!studies.length) {
+        const answer_md =
+          "I don’t see any case studies indexed yet. Try again after ingestion, or ask me about a specific project.";
+        res.status(200).json({
+          answer_md,
+          pills: [],
+          reply: answer_md,
+          debug: { intent },
+        } satisfies ApiResponse);
+        return;
+      }
 
-    // 6) Call OpenAI chat completion
-    const systemPrompt = `You are Aurélia. You are Virtual Aurélia on this portfolio: you speak in first person as her ("I", "my", "me"). You are a founder—direct, warm, and human. Answer only using the provided SOURCES; if the info is not there, say you don't have enough info and suggest what to ask.
+      const listMd =
+        `## Case studies\n\n` +
+        studies.map((s) => `- **${s.title}**`).join("\n");
 
-Write answers as clear, human explanations. Plain text only.
-Never expose internal document names, tags, or RAG metadata (e.g. file paths). When the user asks for contact or personal information (email, phone, address, LinkedIn, GitHub), give them exactly what appears in SOURCES—that is allowed and expected.
-Do not cite sources inline. Do not include any URLs or links in your answer—links will be shown separately (except you may mention email or phone as plain text).
-Prefer short paragraphs. Separate paragraphs with a blank line (empty line between paragraphs).
-Always stay in character as Aurélia: your experience, your choices, your journey.
+      // Pill per case study: clicking sends "Tell me more about [title]" to chat
+      const pills: Pill[] = [];
+      for (const s of studies) {
+        const title = s.title || "Case study";
+        pills.push({
+          label: `Tell me more about ${title}`,
+          url: `prompt:Tell me more about ${title}`,
+        });
+      }
 
-When a question is about background, career, motivations, or "why", you may reference your professional timeline. Weave it in naturally. Do not list dates unless explicitly asked. You may offer "Want the short timeline?" or "Want the full journey?" as plain text only (no links).`;
-
-    const fulfillOfferInstruction = isYesToOffer
-      ? `The user replied "yes" to your previous message. Your previous message was: """${lastAssistant}""" Fulfill the offer you made: provide the link, resource, or next step. Do not ask again or repeat the question; just do it in a short, direct way.`
-      : null;
-
-    const contactIntentHint = isContactIntent(effectiveQuery)
-      ? "The user is asking for contact or personal information. The SOURCES below contain the contact details (email, phone, address, LinkedIn, GitHub). You MUST give the exact information they asked for (e.g. the phone number, email, or address) from SOURCES. Do not refuse, redirect to LinkedIn only, or say you don't have it—the information is in SOURCES."
-      : null;
-
-    const completionMessages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
-      { role: "system", content: systemPrompt },
-      { role: "system", content: `SOURCES:\n\n${contextString}` },
-    ];
-    if (contactIntentHint) {
-      completionMessages.push({ role: "system", content: contactIntentHint });
+      const response: ApiResponse = {
+        answer_md: listMd,
+        pills,
+        reply: listMd,
+        debug: { intent, retrieved: studies.length },
+      };
+      res.status(200).json(response);
+      return;
     }
-    if (fulfillOfferInstruction) {
-      completionMessages.push({ role: "system", content: fulfillOfferInstruction });
+
+    // ── JOURNEY (timeline pill always + RAG for details)
+    if (intent === "JOURNEY") {
+      const query_embedding = await embedQuestion(openai, question);
+
+      // Pull more chunks to avoid "missing experiences"
+      const chunks = await retrieveChunks(supabase, query_embedding, 18);
+
+      const context = buildContext(chunks);
+      const knownIds = [...extractCaseStudyMetaFromChunks(chunks).keys()];
+
+      const { answer_md } = await llmAnswerWithRefs({
+        openai,
+        question:
+          question +
+          "\n\nPlease respond as a clean timeline if the user asked to list experiences (years + role + org + 1-line impact).",
+        context,
+        knownCaseStudyIds: knownIds,
+      });
+
+      const clean = stripMarkdownLinksAndUrls(answer_md);
+
+      const response: ApiResponse = {
+        answer_md: clean,
+        pills: [TIMELINE_PILL],
+        sources: chunks.map((c) => ({ source: c.source, section: c.section, similarity: c.similarity })),
+        reply: clean,
+        debug: { intent, retrieved: chunks.length },
+      };
+      res.status(200).json(response);
+      return;
     }
-    completionMessages.push({ role: "user", content: question });
 
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4.1-mini",
-      temperature: 0.2,
-      messages: completionMessages,
-    });
+    // ── CASE STUDY QA / GENERAL QA (vector + structured output + deterministic pills)
+    {
+      const query_embedding = await embedQuestion(openai, question);
 
-    let reply =
-      completion.choices[0]?.message?.content?.trim() ??
-      "I'm having trouble responding right now. Please try again.";
-    reply = stripLinksFromReply(reply);
+      // Pull more chunks; we’ll dedupe pills by id
+      const chunks = await retrieveChunks(supabase, query_embedding, 15);
+      const context = buildContext(chunks);
 
-    // 7) Build sources array (bestSources already built in step 5)
-    const sources = ragChunks.map((c) => ({
-      source: c.source,
-      section: c.section,
-      similarity: c.similarity,
-    }));
+      const caseStudyMap = extractCaseStudyMetaFromChunks(chunks);
+      const knownIds = [...caseStudyMap.keys()];
 
-    const response: ChatResponse = { reply, sources, bestSources };
-    res.status(200).json(response);
+      const { answer_md, referenced_case_study_ids } = await llmAnswerWithRefs({
+        openai,
+        question,
+        context,
+        knownCaseStudyIds: knownIds,
+      });
+
+      const clean = stripMarkdownLinksAndUrls(answer_md);
+
+      // Build pills only from valid referenced case study IDs
+      const pills: Pill[] = [];
+      const used = new Set<string>();
+
+      // Get valid case studies from referenced IDs
+      const validCaseStudies: CaseStudy[] = [];
+      for (const id of referenced_case_study_ids) {
+        const cs = caseStudyMap.get(id);
+        if (cs) validCaseStudies.push(cs);
+      }
+
+      // If more than 1 case study, use "Tell me more about..." prompts instead of URLs
+      if (validCaseStudies.length > 1) {
+        for (const cs of validCaseStudies) {
+          const title = cs.title || "Case study";
+          const promptUrl = `prompt:Tell me more about ${title}`;
+          if (used.has(promptUrl)) continue;
+          used.add(promptUrl);
+          pills.push({ label: `Tell me more about ${title}`, url: promptUrl });
+        }
+      } else {
+        // Single case study: show direct URL pills
+        for (const cs of validCaseStudies) {
+          for (const p of caseStudyToPills(cs)) {
+            if (used.has(p.url)) continue;
+            used.add(p.url);
+            pills.push(p);
+          }
+        }
+      }
+
+      // If timeline/experience chunks were used, add timeline pill
+      const usedTimelineChunks = chunks.some((c) =>
+        /timeline|experience/i.test(c.source)
+      );
+      if (usedTimelineChunks && !used.has(TIMELINE_PILL.url)) {
+        pills.push(TIMELINE_PILL);
+      }
+
+      const response: ApiResponse = {
+        answer_md: clean,
+        pills,
+        sources: chunks.map((c) => ({ source: c.source, section: c.section, similarity: c.similarity })),
+        reply: clean,
+        debug: { intent, retrieved: chunks.length },
+      };
+
+      res.status(200).json(response);
+      return;
+    }
   } catch (err) {
-    // 8) Log server errors, return safe message
-    console.error("[chat] Unexpected error:", err);
+    console.error("[chat] error:", err);
     res.status(500).json({
-      error: "Something went wrong. Please try again later.",
-    });
+      reply: "Oups — something broke on my side. Try again in a moment.",
+      answer_md: "Oups — something broke on my side. Try again in a moment.",
+      pills: [],
+    } satisfies ApiResponse);
   }
 }

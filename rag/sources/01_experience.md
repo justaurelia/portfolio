@@ -1,6 +1,16 @@
 # Experience
 
-## Jucosa.io — Founder & Product Manager (2023–Present)
+Career summary in reverse chronological order (most recent first):
+- Role 6 (current): Jucosa — Founder & PM (2023–present)
+- Role 5: Rendez-vous French Pastry — Owner (2021–2022)
+- Roles 3–4: Axway — Product & Pre-Sales (2014–2021)
+- Roles 1–2: Sopra Banking Software — Consultant & Analyst (2008–2014)
+
+---
+
+## Role 6 (Current) — Jucosa.io — Founder & Product Manager (2023–Present)
+My sixth and current role. This is my most recent position.
+
 **Context:** Bakeries struggle with production planning, recipe scaling, pricing, and cost control.
 **Role:** Founder and end-to-end product owner.
 
@@ -19,12 +29,14 @@ TypeScript, React/Next.js, AWS (Amplify, Lambda, API Gateway), Vercel, Supabase,
 
 **Key learnings:**
 - Real user pain beats assumptions every time.
-- Smaller milestones ship faster than “perfect” roadmaps.
+- Smaller milestones ship faster than "perfect" roadmaps.
 - Building alone sharpens product judgment.
 
 ---
 
-## Rendez-vous French Pastry — Owner & Product Manager (2021–2022)
+## Role 5 — Rendez-vous French Pastry — Owner & Product Manager (2021–2022)
+My fifth role, before Jucosa.
+
 **Context:** Running a retail bakery while managing costs, staff, and demand.
 **Role:** Owner and operator.
 
@@ -38,7 +50,9 @@ TypeScript, React/Next.js, AWS (Amplify, Lambda, API Gateway), Vercel, Supabase,
 
 ---
 
-## Axway — Product Expert / Pre-Sales (2014–2021)
+## Roles 3–4 — Axway — Product Expert / Pre-Sales (2014–2021)
+My third and fourth roles. Spent 7 years here across product and pre-sales.
+
 **Context:** Enterprise accounting and integration solutions.
 **Role:** Bridge between customers, sales, and product teams.
 
@@ -50,9 +64,11 @@ TypeScript, React/Next.js, AWS (Amplify, Lambda, API Gateway), Vercel, Supabase,
 
 ---
 
-## Sopra Banking Software — Professional Services Consultant (2008–2014)
+## Roles 1–2 — Sopra Banking Software — Professional Services Consultant (2008–2014)
+My first and second roles. This is where my career started.
+
 **Context:** Large-scale banking and payment systems.
-**Role:** Functional consultant.
+**Role:** Functional consultant, then product analyst.
 
 **Responsibilities:**
 - Gathered and documented customer requirements.
