@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { getOrCreateSessionId } from "../lib/sessionId";
+import { getOrCreateSessionId } from "../lib/sessionId.ts";
 
 type BestSource = { title: string; url: string; type: "case-study" | "timeline" | "github" | "contact" | "prompt" };
 

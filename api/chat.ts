@@ -1,5 +1,8 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import OpenAI from "openai";
+
+/** Supabase client type used in this API (permissive to avoid generated-Database type errors). */
+type ApiSupabaseClient = SupabaseClient;
 
 /** Vercel serverless handler types (compatible with @vercel/node) */
 type VercelRequest = { method?: string; body?: unknown };
@@ -153,18 +156,22 @@ function detectIntent(questionRaw: string): Intent {
 // Supabase helpers
 // ─────────────────────────────────────────────────────────────
 
-async function listCaseStudies(supabase: ReturnType<typeof createClient>): Promise<CaseStudy[]> {
+async function listCaseStudies(supabase: ApiSupabaseClient): Promise<CaseStudy[]> {
   // Prefer RPC if you created it (fast + deterministic)
   const rpc = await supabase.rpc("list_case_studies");
-  if (!rpc.error && Array.isArray(rpc.data)) {
-    console.log("[listCaseStudies] RPC returned:", rpc.data.length, "rows");
-    return rpc.data
-      .map((r: any) => ({
-        case_study_id: String(r.case_study_id ?? "").trim(),
-        title: String(r.title ?? "").trim(),
-        url: r.url ? String(r.url) : null,
-        github: r.github ? String(r.github) : null,
-      }))
+  const rpcData = rpc.data as unknown;
+  if (!rpc.error && Array.isArray(rpcData)) {
+    console.log("[listCaseStudies] RPC returned:", rpcData.length, "rows");
+    return rpcData
+      .map((r: unknown) => {
+        const row = r as Record<string, unknown>;
+        return {
+          case_study_id: String(row.case_study_id ?? "").trim(),
+          title: String(row.title ?? "").trim(),
+          url: row.url ? String(row.url) : null,
+          github: row.github ? String(row.github) : null,
+        };
+      })
       .filter((x: CaseStudy) => x.case_study_id && x.title);
   }
 
@@ -259,14 +266,13 @@ async function embedQuestion(openai: OpenAI, question: string): Promise<number[]
 }
 
 async function retrieveChunks(
-  supabase: ReturnType<typeof createClient>,
+  supabase: ApiSupabaseClient,
   query_embedding: number[],
   match_count: number
 ): Promise<RagChunk[]> {
-  const { data, error } = await supabase.rpc("match_rag_chunks", {
-    query_embedding,
-    match_count,
-  });
+  const { data, error } = await (supabase as ApiSupabaseClient & {
+    rpc(name: string, args: { query_embedding: number[]; match_count: number }): Promise<{ data: unknown; error: unknown }>;
+  }).rpc("match_rag_chunks", { query_embedding, match_count });
   if (error) throw error;
   return (data ?? []) as RagChunk[];
 }
