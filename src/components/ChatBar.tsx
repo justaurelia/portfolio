@@ -3,11 +3,17 @@ import { getOrCreateSessionId } from "../lib/sessionId.ts";
 
 type BestSource = { title: string; url: string; type: "case-study" | "timeline" | "github" | "contact" | "prompt" };
 
+const RESUME_PDF_PATH = "/AureliaAzarmiResume2026.pdf";
+const CERTIFICATIONS_URL = "https://www.linkedin.com/in/aurelia-azarmi/details/certifications/";
+const RECOMMENDATIONS_URL = "https://www.linkedin.com/in/aurelia-azarmi/details/recommendations/";
+
 function pillToBestSource(p: { label: string; url: string }): BestSource {
   let type: BestSource["type"] = "case-study";
   if (p.url.startsWith("prompt:")) type = "prompt";
   else if (p.url.startsWith("mailto:")) type = "contact";
   else if (p.url === "/about" || p.label === "Timeline") type = "timeline";
+  else if (p.url === RESUME_PDF_PATH || p.url.endsWith("AureliaAzarmiResume2026.pdf")) type = "contact";
+  else if (p.url.startsWith(CERTIFICATIONS_URL) || p.url.startsWith(RECOMMENDATIONS_URL)) type = "contact";
   else if (/github\.com/i.test(p.url)) {
     // Contact GitHub pill (label "GitHub") → show "GitHub"; case study GitHub → "GitHub · {title}"
     type = p.label.trim().toLowerCase() === "github" ? "contact" : "github";

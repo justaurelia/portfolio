@@ -18,6 +18,8 @@ type Intent =
   | "LIST_CASE_STUDIES"
   | "JOURNEY"
   | "CONTACT"
+  | "CREDENTIALS"
+  | "RECOMMENDATIONS"
   | "CASE_STUDY_QA"
   | "GENERAL_QA";
 
@@ -87,6 +89,21 @@ function stripMarkdownLinksAndUrls(text: string): string {
     .trim();
 }
 
+/** Detects when the answer indicates missing information or uncertainty. */
+function isUnknownAnswer(answer: string): boolean {
+  const lower = answer.toLowerCase().trim();
+  const patterns = [
+    /\b(i don'?t have|i do not have)\b/,
+    /\bdon'?t have (that |enough )?information\b/,
+    /\b(i'?m not sure|i am not sure)\b/,
+    /\b(i don'?t know|i do not know)\b/,
+    /\bthat information (isn'?t|is not) (in|available|handy)\b/,
+    /\bisn'?t in (the )?sources\b/,
+    /\bno relevant (sources?|information)\b/,
+  ];
+  return patterns.some((p) => p.test(lower));
+}
+
 // ─────────────────────────────────────────────────────────────
 // Deterministic pills
 // ─────────────────────────────────────────────────────────────
@@ -102,6 +119,21 @@ const CONTACT_PILLS: Pill[] = [
   { label: "GitHub", url: "https://github.com/justaurelia" },
   // { label: "Book a call", url: "https://cal.com/your-handle" },
 ];
+
+const RESUME_PILL: Pill = {
+  label: "Resume",
+  url: "/AureliaAzarmiResume2026.pdf",
+};
+
+const CERTIFICATIONS_PILL: Pill = {
+  label: "Certifications",
+  url: "https://www.linkedin.com/in/aurelia-azarmi/details/certifications/",
+};
+
+const RECOMMENDATIONS_PILL: Pill = {
+  label: "Recommendations",
+  url: "https://www.linkedin.com/in/aurelia-azarmi/details/recommendations/?detailScreenTabIndex=0",
+};
 
 function caseStudyToPills(cs: CaseStudy): Pill[] {
   const pills: Pill[] = [];
@@ -137,6 +169,14 @@ function detectIntent(questionRaw: string): Intent {
       q
     );
   if (journey) return "JOURNEY";
+
+  const credentials =
+    /\b(education|degree|degrees|school|certification|certifications|aws|berkeley|product school)\b/.test(q);
+  if (credentials) return "CREDENTIALS";
+
+  const recommendations =
+    /\b(recommendations|testimonials|testimonial|colleagues|feedback|what people say about you)\b/.test(q);
+  if (recommendations) return "RECOMMENDATIONS";
 
   // if user explicitly asks about a case study or "what is X" and likely a project name
   const caseStudyAsk =
@@ -310,7 +350,7 @@ Examples of bad tone (too formal/robotic):
 
 Rules:
 - Use ONLY the provided SOURCES for facts about your background, projects, and experience.
-- If the answer isn't in SOURCES, say you don't have that information handy and suggest what else you can help with.
+- Do NOT hallucinate or fabricate answers. If the answer isn't in SOURCES, say so briefly and confidently (e.g. "That isn't in my materials — happy to chat directly if you'd like.").
 - Do NOT format answers as timelines or resume-style lists unless specifically asked for a list.
 - Do NOT include any URLs in the answer — the UI adds links separately.
 - Do NOT mention internal filenames like "SOURCE 1".
@@ -411,6 +451,49 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       return;
     }
 
+    // ── CREDENTIALS (RAG for education/degree content + Resume + Certifications pills)
+    if (intent === "CREDENTIALS") {
+      const query_embedding = await embedQuestion(openai, question);
+      const chunks = await retrieveChunks(supabase, query_embedding, 12);
+      const context = buildContext(chunks);
+      const knownIds = [...extractCaseStudyMetaFromChunks(chunks).keys()];
+
+      const { answer_md } = await llmAnswerWithRefs({
+        openai,
+        question,
+        context,
+        knownCaseStudyIds: knownIds,
+      });
+
+      const clean = stripMarkdownLinksAndUrls(answer_md);
+      let pills: Pill[] = [RESUME_PILL, CERTIFICATIONS_PILL];
+      if (isUnknownAnswer(clean)) pills = CONTACT_PILLS;
+
+      const response: ApiResponse = {
+        answer_md: clean,
+        pills,
+        sources: chunks.map((c) => ({ source: c.source, section: c.section, similarity: c.similarity })),
+        reply: clean,
+        debug: { intent, retrieved: chunks.length },
+      };
+      res.status(200).json(response);
+      return;
+    }
+
+    // ── RECOMMENDATIONS (deterministic: short answer + pill; no URLs in markdown)
+    if (intent === "RECOMMENDATIONS") {
+      const answer_md =
+        "Colleagues and clients have shared kind words about working with me. Check out the link below for their recommendations.";
+      const response: ApiResponse = {
+        answer_md,
+        pills: [RECOMMENDATIONS_PILL],
+        reply: answer_md,
+        debug: { intent },
+      };
+      res.status(200).json(response);
+      return;
+    }
+
     // ── LIST CASE STUDIES (deterministic list + pills)
     if (intent === "LIST_CASE_STUDIES") {
       const studies = await listCaseStudies(supabase);
@@ -472,9 +555,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
 
       const clean = stripMarkdownLinksAndUrls(answer_md);
 
+      let pills: Pill[] = [TIMELINE_PILL];
+      if (isUnknownAnswer(clean)) pills = CONTACT_PILLS;
+
       const response: ApiResponse = {
         answer_md: clean,
-        pills: [TIMELINE_PILL],
+        pills,
         sources: chunks.map((c) => ({ source: c.source, section: c.section, similarity: c.similarity })),
         reply: clean,
         debug: { intent, retrieved: chunks.length },
@@ -504,7 +590,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       const clean = stripMarkdownLinksAndUrls(answer_md);
 
       // Build pills only from valid referenced case study IDs
-      const pills: Pill[] = [];
+      let pills: Pill[] = [];
       const used = new Set<string>();
 
       // Get valid case studies from referenced IDs
@@ -548,6 +634,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       ) {
         pills.push(TIMELINE_PILL);
       }
+
+      if (isUnknownAnswer(clean)) pills = CONTACT_PILLS;
 
       const response: ApiResponse = {
         answer_md: clean,
