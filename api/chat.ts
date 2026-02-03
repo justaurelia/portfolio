@@ -381,19 +381,44 @@ Citations:
   });
 
   const raw = completion.choices[0]?.message?.content?.trim() ?? "";
-  // Parse strict JSON; fallback if model slips
+
+  function stripJsonEcho(text: string): string {
+    // Remove trailing JSON schema echo: { "answer_md": "...", "referenced_case_study_ids": [] }
+    return text
+      .replace(/\s*\{\s*"answer_md"\s*:\s*"(?:[^"\\]|\\.)*"\s*,\s*"referenced_case_study_ids"\s*:\s*\[\s*\]\s*\}\s*$/s, "")
+      .trim();
+  }
+
+  let answer_md = "";
+  let referenced_case_study_ids: string[] = [];
+
   try {
     const parsed = JSON.parse(raw) as any;
-    const answer_md = typeof parsed.answer_md === "string" ? parsed.answer_md.trim() : "";
-    const referenced_case_study_ids = Array.isArray(parsed.referenced_case_study_ids)
+    answer_md = typeof parsed.answer_md === "string" ? parsed.answer_md.trim() : "";
+    referenced_case_study_ids = Array.isArray(parsed.referenced_case_study_ids)
       ? parsed.referenced_case_study_ids.map((x: any) => String(x).trim()).filter(Boolean)
       : [];
-    return { answer_md, referenced_case_study_ids };
   } catch {
-    // Fallback: treat as plain text, no refs
-    return { answer_md: stripMarkdownLinksAndUrls(raw) || "Sorry — I couldn’t format that response.", referenced_case_study_ids: [] };
+    const jsonIdx = raw.search(/\{\s*["']answer_md["']\s*:/);
+    if (jsonIdx >= 0) {
+      try {
+        const parsed = JSON.parse(raw.slice(jsonIdx)) as any;
+        answer_md = typeof parsed.answer_md === "string" ? parsed.answer_md.trim() : "";
+        referenced_case_study_ids = Array.isArray(parsed.referenced_case_study_ids)
+          ? parsed.referenced_case_study_ids.map((x: any) => String(x).trim()).filter(Boolean)
+          : [];
+      } catch {
+        answer_md = stripMarkdownLinksAndUrls(stripJsonEcho(raw)) || "Sorry — I couldn't format that response.";
+      }
+    } else {
+      answer_md = stripMarkdownLinksAndUrls(stripJsonEcho(raw)) || "Sorry — I couldn't format that response.";
+    }
   }
+
+  answer_md = stripJsonEcho(answer_md) || answer_md;
+  return { answer_md, referenced_case_study_ids };
 }
+
 
 // ─────────────────────────────────────────────────────────────
 // Handler
