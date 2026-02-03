@@ -132,7 +132,7 @@ const CERTIFICATIONS_PILL: Pill = {
 
 const RECOMMENDATIONS_PILL: Pill = {
   label: "Recommendations",
-  url: "https://www.linkedin.com/in/aurelia-azarmi/details/recommendations/?detailScreenTabIndex=0",
+  url: "https://www.linkedin.com/in/aurelia-azarmi/details/recommendations/",
 };
 
 function caseStudyToPills(cs: CaseStudy): Pill[] {
