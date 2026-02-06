@@ -155,6 +155,14 @@ function SourcePill({
   );
 }
 
+const SUGGESTED_QUESTIONS: string[] = [
+  "What are you building right now?",
+  "Show me your case studies",
+  "What's your career journey?",
+  "What's your background and education?",
+  "What do people say about working with you?",
+];
+
 const PROPOSITIONS = [
   "What drives your product decisions?",
   "Tell me about a case study.",
@@ -298,6 +306,25 @@ export default function ChatBar() {
         ref={listRef}
         className="flex-1 min-h-0 overflow-y-auto scrollbar-transparent py-0 px-1 pb-4 flex flex-col gap-3"
       >
+        {messages.length === 0 && (
+          <div className="flex flex-col gap-3 py-4">
+            <p className="text-[14px] text-porcelain/60">Not sure where to start? Try one of these.</p>
+            <div className="flex flex-wrap gap-2">
+              {SUGGESTED_QUESTIONS.map((q) => (
+                <button
+                  key={q}
+                  type="button"
+                  onClick={() => sendMessage(q)}
+                  disabled={loading}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-porcelain/20 bg-porcelain/5 px-3 py-1.5 text-[13px] text-porcelain/70 hover:bg-porcelain/15 hover:border-porcelain/30 hover:text-porcelain/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <span aria-hidden>→</span>
+                  {q}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         {messages.map((m, i) => (
           <div
             key={i}
